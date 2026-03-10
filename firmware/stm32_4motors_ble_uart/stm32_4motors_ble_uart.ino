@@ -4,17 +4,14 @@
 #define SERIAL_BT Serial1
 static const uint32_t BAUD = 115200;
 
-// ===== Motors pins (STEP, DIR, EN) =====
-// M1 // PA0, PA1, PA2
-// M2 // PA3, PA4, PA5
-// M3 // PA6, PA7, PB0  
-// M4 // PB1, PB10, PB11
+// ===== Motors pins (STEP, DIR) =====
+// M1 // PA0, PA1
+// M2 // PA3, PA4
+// M3 // PA6, PA7
+// M4 // PB1, PB10
 static const uint8_t STEP_PIN[4] = {PA0, PA3, PA6, PB1};
 static const uint8_t DIR_PIN[4]  = {PA1, PA4, PA7, PB10};
-static const uint8_t EN_PIN[4]   = {PA2, PA5, PB0, PB11};
 
-// enableMotor(true) => habilitado (EN activo en LOW como en tu código original)
-static inline void enableMotor(int i, bool en) { digitalWrite(EN_PIN[i], !en); }
 static inline void setDirection(int i, bool dir) { digitalWrite(DIR_PIN[i], dir); }
 static inline void stepMotor(int i) {
   digitalWrite(STEP_PIN[i], HIGH);
@@ -92,7 +89,7 @@ static void resetMotorState(int i) {
 }
 
 static void sendStatus() {
-  // Ej: S:FL=0,FR=0,RL=0,RR=0,PID=18,0.02,3
+  // Ej: S:M1=0,M2=0,M3=0,M4=0,PID=18,0.02,3
   SERIAL_BT.print("S:");
   SERIAL_BT.print("M1="); SERIAL_BT.print(target_clicks[0]);
   SERIAL_BT.print(",M2="); SERIAL_BT.print(target_clicks[1]);
@@ -109,7 +106,6 @@ static void sendStatus() {
 static void motorControlTick(int i) {
   const long error_steps = target_steps[i] - current_steps[i];
   if (error_steps == 0) {
-    // Si estamos en target, también actualizamos current_clicks para reportar coherente
     current_clicks[i] = target_clicks[i];
     return;
   }
@@ -139,17 +135,14 @@ static char lineBuf[96];
 static uint8_t lineLen = 0;
 
 static void handleLine(const char* line) {
-  // quitamos espacios
   while (*line == ' ' || *line == '\t' || *line == '\r') line++;
   if (*line == 0) return;
 
-  // GET
   if (strcmp(line, "GET") == 0) {
     sendStatus();
     return;
   }
 
-  // ZERO / RESET
   if (strcmp(line, "ZERO") == 0) {
     for (int i = 0; i < 4; i++) resetMotorState(i);
     SERIAL_BT.print("OK:ZERO\n");
@@ -157,7 +150,6 @@ static void handleLine(const char* line) {
   }
 
   // Mx:clicks  (1..4)
-  // Ej: M1:10
   if (line[0] == 'M' && line[1] >= '1' && line[1] <= '4' && line[2] == ':') {
     const int motor = (line[1] - '1'); // 0..3
     const int clicksVal = atoi(line + 3);
@@ -172,8 +164,6 @@ static void handleLine(const char* line) {
 
   // PID:KP=18,KI=0.02,KD=3
   if (strncmp(line, "PID:", 4) == 0) {
-    // parse manual simple
-    // buscamos KP=, KI=, KD=
     const char* kpPos = strstr(line, "KP=");
     const char* kiPos = strstr(line, "KI=");
     const char* kdPos = strstr(line, "KD=");
@@ -190,7 +180,6 @@ static void handleLine(const char* line) {
     Ki = newKi;
     Kd = newKd;
 
-    // (recomendado) reset integral/derivada al cambiar parámetros
     for (int i = 0; i < 4; i++) {
       pid_integral[i] = 0;
       pid_last_error[i] = 0;
@@ -214,13 +203,11 @@ static void serialReadLines() {
       continue;
     }
 
-    // ignoramos CR
     if (ch == '\r') continue;
 
     if (lineLen < sizeof(lineBuf) - 1) {
       lineBuf[lineLen++] = ch;
     } else {
-      // overflow -> reset
       lineLen = 0;
       SERIAL_BT.print("ERR:LINE_TOO_LONG\n");
     }
@@ -231,14 +218,11 @@ void setup() {
   for (int i = 0; i < 4; i++) {
     pinMode(STEP_PIN[i], OUTPUT);
     pinMode(DIR_PIN[i], OUTPUT);
-    pinMode(EN_PIN[i], OUTPUT);
-    enableMotor(i, true);
   }
 
   SERIAL_BT.begin(BAUD);
   SERIAL_BT.print("BOOT:STM32_4M\n");
 
-  // Inicialmente target = 0
   for (int i = 0; i < 4; i++) {
     setTargetClicks(i, 0);
   }
@@ -247,7 +231,6 @@ void setup() {
 void loop() {
   serialReadLines();
 
-  // control tick de los 4 motores
   for (int i = 0; i < 4; i++) {
     motorControlTick(i);
   }
