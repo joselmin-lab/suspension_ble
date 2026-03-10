@@ -7,7 +7,7 @@ static const uint32_t BAUD = 115200;
 // ===== Motors pins (STEP, DIR, EN) =====
 // M1 // PA0, PA1, PA2
 // M2 // PA3, PA4, PA5
-// M3 // PA6, PA7, PB0   (ojo: comentario original tenía typo "PA7M PB0")
+// M3 // PA6, PA7, PB0  
 // M4 // PB1, PB10, PB11
 static const uint8_t STEP_PIN[4] = {PA0, PA3, PA6, PB1};
 static const uint8_t DIR_PIN[4]  = {PA1, PA4, PA7, PB10};
@@ -29,7 +29,7 @@ static const float STEP_ANGLE = 360.0f / (float)STEPS_PER_REV;
 // En tu firmware: 180° por "click"
 static const float CLICK_DEG = 180.0f;
 static const int MIN_CLICKS = 0;
-static const int MAX_CLICKS = 22;
+static const int MAX_CLICKS = 21;
 
 // Rango velocidad (pasos por segundo)
 static const int MAX_STEP_RATE = 8000;

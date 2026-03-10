@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+
 import 'ble_transport.dart';
 import 'device_picker_page.dart';
+import 'profile_models.dart';
+import 'profile_store.dart';
 
 void main() => runApp(const SuspensionUiApp());
 
@@ -35,10 +38,25 @@ class SuspensionUiApp extends StatelessWidget {
   }
 }
 
-class SuspensionStateModel {
-  static const int minClicks = 0;
-  static const int maxClicks = 22;
+class SuspensionPage extends StatefulWidget {
+  const SuspensionPage({super.key});
 
+  @override
+  State<SuspensionPage> createState() => _SuspensionPageState();
+}
+
+class _SuspensionPageState extends State<SuspensionPage> {
+  // ===== BLE =====
+  final List<String> logs = [];
+  late final BleTransport ble = BleTransport(onLog: _log);
+
+  // ===== Profiles =====
+  List<SuspensionProfile> profiles = const [];
+  SuspensionProfile? active;
+
+  bool loadingProfiles = true;
+
+  // ===== UI state (editable) =====
   final Map<Corner, int> clicks = {
     Corner.fl: 0,
     Corner.fr: 0,
@@ -50,26 +68,7 @@ class SuspensionStateModel {
   double ki = 0.02;
   double kd = 3.0;
 
-  int clampClicks(int v) => v.clamp(minClicks, maxClicks);
-}
-
-class SuspensionPage extends StatefulWidget {
-  const SuspensionPage({super.key});
-
-  @override
-  State<SuspensionPage> createState() => _SuspensionPageState();
-}
-
-class _SuspensionPageState extends State<SuspensionPage> {
-  final model = SuspensionStateModel();
-  final List<String> logs = [];
-
-  late final BleTransport ble = BleTransport(
-    onLog: _log,
-   
-    
-  );
-
+  // ===== Helpers =====
   void _log(String line) {
     setState(() {
       logs.insert(0, '${DateTime.now().toIso8601String()}  $line');
@@ -77,46 +76,359 @@ class _SuspensionPageState extends State<SuspensionPage> {
     });
   }
 
-    Future<void> _connect() async {
-  try {
-    final ok = await Navigator.of(context).push<bool>(
+  int _clampClicks(int v) => v.clamp(0, 22);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfiles();
+  }
+
+  Future<void> _loadProfiles() async {
+    setState(() => loadingProfiles = true);
+
+    final loaded = await ProfileStore.loadProfiles();
+    final activeId = await ProfileStore.loadActiveProfileId();
+
+    SuspensionProfile picked;
+    if (activeId != null) {
+      picked = loaded.firstWhere(
+        (p) => p.id == activeId,
+        orElse: () => loaded.first,
+      );
+    } else {
+      picked = loaded.first;
+    }
+
+    setState(() {
+      profiles = loaded;
+      active = picked;
+      loadingProfiles = false;
+    });
+
+    _applyProfileToUi(picked);
+
+    // Auto-connect (opción B) si tiene device asignado
+    await _autoConnectForActiveProfile();
+  }
+
+  void _applyProfileToUi(SuspensionProfile p) {
+    setState(() {
+      clicks[Corner.fl] = _clampClicks(p.fl);
+      clicks[Corner.fr] = _clampClicks(p.fr);
+      clicks[Corner.rl] = _clampClicks(p.rl);
+      clicks[Corner.rr] = _clampClicks(p.rr);
+
+      kp = p.pid.kp;
+      ki = p.pid.ki;
+      kd = p.pid.kd;
+    });
+  }
+
+  SuspensionProfile _uiToProfile(SuspensionProfile base, {String? deviceId, String? deviceName}) {
+    return base.copyWith(
+      deviceId: deviceId ?? base.deviceId,
+      deviceName: deviceName ?? base.deviceName,
+      fl: _clampClicks(clicks[Corner.fl] ?? 0),
+      fr: _clampClicks(clicks[Corner.fr] ?? 0),
+      rl: _clampClicks(clicks[Corner.rl] ?? 0),
+      rr: _clampClicks(clicks[Corner.rr] ?? 0),
+      pid: SuspensionPid(kp: kp, ki: ki, kd: kd),
+      lastUsedMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  Future<void> _saveActiveFromUi() async {
+    final a = active;
+    if (a == null) return;
+
+    final updated = _uiToProfile(a);
+
+    final newProfiles = profiles.map((p) => p.id == updated.id ? updated : p).toList();
+
+    setState(() {
+      profiles = newProfiles;
+      active = updated;
+    });
+
+    await ProfileStore.saveProfiles(newProfiles);
+    await ProfileStore.saveActiveProfileId(updated.id);
+  }
+
+  Future<void> _setActiveProfile(SuspensionProfile p) async {
+    // antes de cambiar, guardamos el active actual con lo que haya en UI
+    await _saveActiveFromUi();
+
+    setState(() => active = p);
+    _applyProfileToUi(p);
+
+    await ProfileStore.saveActiveProfileId(p.id);
+
+    // Auto-connect por perfil
+    await _autoConnectForActiveProfile();
+  }
+
+  Future<void> _autoConnectForActiveProfile() async {
+    final a = active;
+    if (a == null) return;
+
+    if (a.deviceId == null || a.deviceId!.trim().isEmpty) {
+      _log('INFO -> Perfil "${a.name}" sin device asignado (no auto-connect).');
+      return;
+    }
+
+    // Si ya está conectado, no hacemos nada.
+    if (ble.isConnected) {
+      _log('INFO -> Ya conectado. (Perfil: ${a.name})');
+      return;
+    }
+
+    try {
+      _log('BLE -> Auto-connect: buscando ${a.deviceName ?? "(sin nombre)"} (${a.deviceId})');
+      // Escaneamos y buscamos match por remoteId.str
+      final results = await ble.scan(timeout: const Duration(seconds: 6));
+      final match = results.where((r) => r.device.remoteId.str == a.deviceId).toList();
+
+      if (match.isEmpty) {
+        _log('WARN -> No encontré el device del perfil en el scan.');
+        return;
+      }
+
+      await ble.connectToResult(match.first);
+      if (mounted) setState(() {});
+      _log('BLE -> Auto-connect OK (perfil "${a.name}")');
+    } catch (e) {
+      _log('ERR -> Auto-connect falló: $e');
+    }
+  }
+
+  // ===== Profile UI actions =====
+
+  Future<String?> _promptText({
+    required String title,
+    required String label,
+    String initial = '',
+    String okText = 'OK',
+  }) async {
+    final ctrl = TextEditingController(text: initial);
+    final res = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: ctrl,
+          decoration: InputDecoration(labelText: label),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text(okText),
+          ),
+        ],
+      ),
+    );
+    if (res == null || res.trim().isEmpty) return null;
+    return res.trim();
+  }
+
+  Future<void> _createProfile() async {
+    final name = await _promptText(title: 'Nuevo perfil', label: 'Nombre del perfil', okText: 'Crear');
+    if (name == null) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final id = 'p_$now';
+
+    // por defecto: copia valores actuales de UI (así puedes crear “nuevo vehículo” desde un setup)
+    final p = SuspensionProfile(
+      id: id,
+      name: name,
+      deviceId: null,
+      deviceName: null,
+      fl: _clampClicks(clicks[Corner.fl] ?? 0),
+      fr: _clampClicks(clicks[Corner.fr] ?? 0),
+      rl: _clampClicks(clicks[Corner.rl] ?? 0),
+      rr: _clampClicks(clicks[Corner.rr] ?? 0),
+      pid: SuspensionPid(kp: kp, ki: ki, kd: kd),
+      lastUsedMs: now,
+    );
+
+    final newProfiles = [...profiles, p];
+
+    setState(() {
+      profiles = newProfiles;
+      active = p;
+    });
+
+    await ProfileStore.saveProfiles(newProfiles);
+    await ProfileStore.saveActiveProfileId(p.id);
+  }
+
+  Future<void> _renameActiveProfile() async {
+    final a = active;
+    if (a == null) return;
+
+    final name =
+        await _promptText(title: 'Renombrar perfil', label: 'Nuevo nombre', initial: a.name, okText: 'Guardar');
+    if (name == null) return;
+
+    final updated = a.copyWith(name: name);
+    final newProfiles = profiles.map((p) => p.id == updated.id ? updated : p).toList();
+
+    setState(() {
+      profiles = newProfiles;
+      active = updated;
+    });
+
+    await ProfileStore.saveProfiles(newProfiles);
+    await ProfileStore.saveActiveProfileId(updated.id);
+  }
+
+  Future<void> _deleteActiveProfile() async {
+    final a = active;
+    if (a == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar perfil'),
+        content: Text('¿Eliminar "${a.name}"? (No se puede deshacer)'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    final remaining = profiles.where((p) => p.id != a.id).toList();
+    if (remaining.isEmpty) {
+      // si borró el último, creamos uno default
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final def = SuspensionProfile(
+        id: 'default_$now',
+        name: 'Default',
+        deviceId: null,
+        deviceName: null,
+        fl: 0,
+        fr: 0,
+        rl: 0,
+        rr: 0,
+        pid: const SuspensionPid(kp: 18.0, ki: 0.02, kd: 3.0),
+        lastUsedMs: now,
+      );
+      remaining.add(def);
+    }
+
+    final newActive = remaining.first;
+
+    setState(() {
+      profiles = remaining;
+      active = newActive;
+    });
+
+    await ProfileStore.saveProfiles(remaining);
+    await ProfileStore.saveActiveProfileId(newActive.id);
+
+    _applyProfileToUi(newActive);
+  }
+
+  Future<void> _assignDeviceToActiveProfile() async {
+    final picked = await Navigator.of(context).push<PickedDevice>(
       MaterialPageRoute(builder: (_) => DevicePickerPage(ble: ble)),
     );
-    if (ok == true && mounted) setState(() {});
-  } catch (e) {
-    _log('ERR -> $e');
+
+    if (picked == null) return;
+
+    final a = active;
+    if (a == null) return;
+
+    final updated = _uiToProfile(a, deviceId: picked.deviceId, deviceName: picked.deviceName);
+
+    final newProfiles = profiles.map((p) => p.id == updated.id ? updated : p).toList();
+
+    setState(() {
+      profiles = newProfiles;
+      active = updated;
+    });
+
+    await ProfileStore.saveProfiles(newProfiles);
+    await ProfileStore.saveActiveProfileId(updated.id);
+
+    _log('INFO -> Perfil "${updated.name}" asignado a ${picked.deviceName} (${picked.deviceId})');
   }
-}
+
+  // ===== BLE buttons =====
+
+  Future<void> _connectManual() async {
+    try {
+      final picked = await Navigator.of(context).push<PickedDevice>(
+        MaterialPageRoute(builder: (_) => DevicePickerPage(ble: ble)),
+      );
+
+      if (picked == null) return;
+      if (mounted) setState(() {});
+
+      // Guardar último device en perfil activo (porque pediste "1) sí")
+      final a = active;
+      if (a != null) {
+        final updated = _uiToProfile(a, deviceId: picked.deviceId, deviceName: picked.deviceName);
+        final newProfiles = profiles.map((p) => p.id == updated.id ? updated : p).toList();
+        setState(() {
+          profiles = newProfiles;
+          active = updated;
+        });
+        await ProfileStore.saveProfiles(newProfiles);
+        await ProfileStore.saveActiveProfileId(updated.id);
+      }
+    } catch (e) {
+      _log('ERR -> $e');
+    }
+  }
 
   Future<void> _disconnect() async {
     await ble.disconnect();
     if (mounted) setState(() {});
   }
 
+  // ===== Sending =====
+
   Future<void> _sendOne(Corner c) async {
     try {
-      final v = model.clicks[c]!;
+      final v = _clampClicks(clicks[c] ?? 0);
       await ble.sendSetClicks(motorId: c.motorId, clicks: v);
+      await _saveActiveFromUi(); // persistimos cambio/estado actual
     } catch (e) {
       _log('ERR -> $e');
     }
   }
 
   Future<void> _sendAll() async {
-    for (final c in Corner.values) {
-      await _sendOne(c);
+    try {
+      for (final c in Corner.values) {
+        await _sendOne(c);
+      }
+      _log('INFO -> Enviados 4 comandos (FL/FR/RL/RR)');
+    } catch (e) {
+      _log('ERR -> $e');
     }
-    _log('INFO -> Enviados 4 comandos (FL/FR/RL/RR)');
   }
 
   Future<void> _applyPresetAndSend(String presetName, int v) async {
-    v = model.clampClicks(v);
+    v = _clampClicks(v);
 
     setState(() {
       for (final c in Corner.values) {
-        model.clicks[c] = v;
+        clicks[c] = v;
       }
     });
+
+    await _saveActiveFromUi();
 
     _log('UI  -> Preset $presetName aplicado: $v clicks (enviando...)');
 
@@ -131,23 +443,103 @@ class _SuspensionPageState extends State<SuspensionPage> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AdvancedSettingsPage(
-          initialKp: model.kp,
-          initialKi: model.ki,
-          initialKd: model.kd,
+          initialKp: kp,
+          initialKi: ki,
+          initialKd: kd,
           logs: logs,
           onLog: _log,
-          onApply: (kp, ki, kd) async {
+          onApply: (newKp, newKi, newKd) async {
             setState(() {
-              model.kp = kp;
-              model.ki = ki;
-              model.kd = kd;
+              kp = newKp;
+              ki = newKi;
+              kd = newKd;
             });
-            await ble.sendPid(kp: kp, ki: ki, kd: kd);
+            await _saveActiveFromUi();
+            await ble.sendPid(kp: newKp, ki: newKi, kd: newKd);
           },
         ),
       ),
     );
     setState(() {});
+  }
+
+  // ===== Widgets =====
+
+  Widget _profilesPanel() {
+    final a = active;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Perfil', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: loadingProfiles
+                      ? const Text('Cargando perfiles...')
+                      : DropdownButtonFormField<String>(
+                          initialValue: a?.id,
+                          items: profiles
+                              .map((p) => DropdownMenuItem(
+                                    value: p.id,
+                                    child: Text(p.name),
+                                  ))
+                              .toList(),
+                          onChanged: (id) {
+                            if (id == null) return;
+                            final p = profiles.firstWhere((x) => x.id == id);
+                            _setActiveProfile(p);
+                          },
+                          decoration: const InputDecoration(
+                            labelText: 'Seleccionar perfil',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _createProfile,
+                  tooltip: 'Nuevo perfil',
+                  icon: const Icon(Icons.add),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Opciones de perfil',
+                  onSelected: (v) {
+                    switch (v) {
+                      case 'rename':
+                        _renameActiveProfile();
+                        break;
+                      case 'assign':
+                        _assignDeviceToActiveProfile();
+                        break;
+                      case 'delete':
+                        _deleteActiveProfile();
+                        break;
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'rename', child: Text('Renombrar')),
+                    PopupMenuItem(value: 'assign', child: Text('Asignar/Conectar dispositivo')),
+                    PopupMenuItem(value: 'delete', child: Text('Eliminar')),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              a?.deviceId == null
+                  ? 'Device: (no asignado)'
+                  : 'Device: ${a?.deviceName ?? "(sin nombre)"} (${a?.deviceId})',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _blePanel() {
@@ -164,7 +556,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
             ),
             if (!ble.isConnected)
               FilledButton.icon(
-                onPressed: _connect,
+                onPressed: _connectManual,
                 icon: const Icon(Icons.bluetooth_connected),
                 label: const Text('Conectar'),
               )
@@ -190,7 +582,8 @@ class _SuspensionPageState extends State<SuspensionPage> {
   }
 
   Widget _cornerCard(Corner c) {
-    final v = model.clicks[c]!;
+    final v = _clampClicks(clicks[c] ?? 0);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -214,11 +607,12 @@ class _SuspensionPageState extends State<SuspensionPage> {
             ),
             Slider(
               value: v.toDouble(),
-              min: SuspensionStateModel.minClicks.toDouble(),
-              max: SuspensionStateModel.maxClicks.toDouble(),
-              divisions: (SuspensionStateModel.maxClicks - SuspensionStateModel.minClicks),
+              min: 0,
+              max: 22,
+              divisions: 22,
               label: '$v',
-              onChanged: (d) => setState(() => model.clicks[c] = d.toInt()),
+              onChanged: (d) => setState(() => clicks[c] = d.toInt()),
+              onChangeEnd: (_) => _saveActiveFromUi(), // guardar al soltar
             ),
           ],
         ),
@@ -292,6 +686,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          _profilesPanel(),
           _blePanel(),
           Row(
             children: [

@@ -4,6 +4,14 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'ble_transport.dart';
 import 'ble_permissions.dart';
 
+class PickedDevice {
+  final String deviceId;   // remoteId.str
+  final String deviceName; // advName/platformName
+  final ScanResult result;
+
+  PickedDevice({required this.deviceId, required this.deviceName, required this.result});
+}
+
 class DevicePickerPage extends StatefulWidget {
   const DevicePickerPage({super.key, required this.ble});
 
@@ -37,15 +45,13 @@ class _DevicePickerPageState extends State<DevicePickerPage> {
       await BlePermissions.requestOrThrow();
       final r = await widget.ble.scan(timeout: const Duration(seconds: 6));
 
-      // Filtrar duplicados por remoteId
       final map = <String, ScanResult>{};
       for (final x in r) {
         map[x.device.remoteId.str] = x;
       }
 
       setState(() {
-        results = map.values.toList()
-          ..sort((a, b) => _nameOf(a).compareTo(_nameOf(b)));
+        results = map.values.toList()..sort((a, b) => _nameOf(a).compareTo(_nameOf(b)));
       });
     } catch (e) {
       setState(() => error = '$e');
@@ -58,7 +64,14 @@ class _DevicePickerPageState extends State<DevicePickerPage> {
     try {
       await BlePermissions.requestOrThrow();
       await widget.ble.connectToResult(picked);
-      if (mounted) Navigator.of(context).pop(true); // conectado
+
+      final pd = PickedDevice(
+        deviceId: picked.device.remoteId.str,
+        deviceName: _nameOf(picked),
+        result: picked,
+      );
+
+      if (mounted) Navigator.of(context).pop(pd);
     } catch (e) {
       setState(() => error = '$e');
     }

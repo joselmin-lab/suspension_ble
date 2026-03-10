@@ -26,17 +26,42 @@ class BleTransport implements CommandTransport {
   }
 
   /// Escaneo que retorna resultados (para UI de selección)
+  /// Nota: acumulamos resultados durante todo el tiempo para evitar que el primer evento llegue vacío.
   Future<List<ScanResult>> scan({Duration timeout = const Duration(seconds: 6)}) async {
     await ensureAdapterOn();
 
     onLog('BLE -> scan start (${timeout.inSeconds}s)');
-    await FlutterBluePlus.stopScan();
-    await FlutterBluePlus.startScan(timeout: timeout);
 
-    // esperamos resultados (durante el scan se van actualizando)
-    final results = await FlutterBluePlus.scanResults.first;
-    await FlutterBluePlus.stopScan();
+    // por si hubiera un scan anterior colgado
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
 
+    final Map<String, ScanResult> map = {};
+
+    final sub = FlutterBluePlus.scanResults.listen((list) {
+      for (final r in list) {
+        map[r.device.remoteId.str] = r;
+      }
+    });
+
+    try {
+      // LowLatency suele mejorar el descubrimiento en Android
+      await FlutterBluePlus.startScan(
+        timeout: timeout,
+        androidScanMode: AndroidScanMode.lowLatency,
+      );
+
+      // esperamos a que termine el timeout
+      await Future.delayed(timeout);
+    } finally {
+      try {
+        await FlutterBluePlus.stopScan();
+      } catch (_) {}
+      await sub.cancel();
+    }
+
+    final results = map.values.toList();
     onLog('BLE -> scan done (${results.length} resultados)');
     return results;
   }
@@ -72,6 +97,7 @@ class BleTransport implements CommandTransport {
       }
     }
 
+    // Seleccionamos la primera característica que permita escribir
     BluetoothCharacteristic? candidate;
     for (final s in services) {
       for (final c in s.characteristics) {
