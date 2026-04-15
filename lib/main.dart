@@ -498,25 +498,106 @@ class _SuspensionPageState extends State<SuspensionPage> {
     }
   }
 
-  Future<void> _applyPresetAndSend(String presetName, int v) async {
+  Future<void> _applyPresetAndSend(String presetName, PresetConfig config) async {
     HapticFeedback.mediumImpact();
-    v = _clampClicks(v);
 
     setState(() {
-      for (final c in Corner.values) {
-        clicks[c] = v;
-      }
+      clicks[Corner.fl] = _clampClicks(config.fl);
+      clicks[Corner.fr] = _clampClicks(config.fr);
+      clicks[Corner.rl] = _clampClicks(config.rl);
+      clicks[Corner.rr] = _clampClicks(config.rr);
     });
 
     await _saveActiveFromUi();
 
-    _log('UI  -> Preset $presetName aplicado: $v clicks (enviando...)');
+    _log('UI  -> Preset $presetName aplicado: FL:${config.fl} FR:${config.fr} RL:${config.rl} RR:${config.rr} (enviando...)');
 
     for (final c in Corner.values) {
-      await ble.sendSetClicks(motorId: c.motorId, clicks: v);
+      await ble.sendSetClicks(motorId: c.motorId, clicks: _clampClicks(clicks[c] ?? 0));
     }
 
     _log('INFO -> Preset $presetName enviado a los 4 motores');
+  }
+
+  Future<void> _editPreset(String presetName, PresetConfig current) async {
+    var fl = current.fl;
+    var fr = current.fr;
+    var rl = current.rl;
+    var rr = current.rr;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) {
+          Widget wheelRow(String label, int value, ValueChanged<int> onChanged) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text(
+                      '$value clk',
+                      style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w800, fontSize: 13),
+                    ),
+                  ],
+                ),
+                Slider(
+                  min: 0,
+                  max: 22,
+                  divisions: 22,
+                  value: value.toDouble(),
+                  label: '$value',
+                  onChanged: (v) => onChanged(v.toInt()),
+                ),
+              ],
+            );
+          }
+
+          return AlertDialog(
+            title: Text('Configurar $presetName'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  wheelRow('FL (Del Izq)', fl, (v) => setStateDialog(() => fl = v)),
+                  wheelRow('FR (Del Der)', fr, (v) => setStateDialog(() => fr = v)),
+                  wheelRow('RL (Tras Izq)', rl, (v) => setStateDialog(() => rl = v)),
+                  wheelRow('RR (Tras Der)', rr, (v) => setStateDialog(() => rr = v)),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final newConfig = PresetConfig(fl: fl, fr: fr, rl: rl, rr: rr);
+    final a = active;
+    if (a == null) return;
+
+    final updated = switch (presetName) {
+      'Comfort' => a.copyWith(presetComfort: newConfig),
+      'Sport' => a.copyWith(presetSport: newConfig),
+      'Track' => a.copyWith(presetTrack: newConfig),
+      _ => a,
+    };
+
+    final newProfiles = profiles.map((p) => p.id == updated.id ? updated : p).toList();
+    setState(() {
+      profiles = newProfiles;
+      active = updated;
+    });
+
+    await ProfileStore.saveProfiles(newProfiles);
+    _log('UI  -> Preset $presetName guardado: FL:$fl FR:$fr RL:$rl RR:$rr');
   }
 
   Future<void> _openAdvanced() async {
@@ -744,8 +825,13 @@ class _SuspensionPageState extends State<SuspensionPage> {
     );
   }
 
-  Widget _presetButton(String label, int value, IconData icon) {
+  Widget _presetButton(String label, PresetConfig config, IconData icon) {
     final isConnected = ble.isConnected;
+    final allSame = config.fl == config.fr && config.fr == config.rl && config.rl == config.rr;
+    final summaryText = allSame
+        ? '${config.fl} clk'
+        : 'FL:${config.fl} FR:${config.fr} | RL:${config.rl} RR:${config.rr}';
+
     return Expanded(
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
@@ -764,7 +850,8 @@ class _SuspensionPageState extends State<SuspensionPage> {
           ),
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
-        onPressed: isConnected ? () => _applyPresetAndSend(label, value) : null,
+        onPressed: isConnected ? () => _applyPresetAndSend(label, config) : null,
+        onLongPress: () => _editPreset(label, config),
         icon: Icon(icon, size: 16),
         label: Column(
           mainAxisSize: MainAxisSize.min,
@@ -778,8 +865,9 @@ class _SuspensionPageState extends State<SuspensionPage> {
               ),
             ),
             Text(
-              '$value clk',
-              style: const TextStyle(fontSize: 10, color: Colors.white38),
+              summaryText,
+              style: const TextStyle(fontSize: 9, color: Colors.white38),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -888,9 +976,9 @@ class _SuspensionPageState extends State<SuspensionPage> {
 
   @override
   Widget build(BuildContext context) {
-    const comfort = 0;
-    const sport = 11;
-    const track = 22;
+    final presetComfort = active?.presetComfort ?? const PresetConfig(fl: 0, fr: 0, rl: 0, rr: 0);
+    final presetSport = active?.presetSport ?? const PresetConfig(fl: 11, fr: 11, rl: 11, rr: 11);
+    final presetTrack = active?.presetTrack ?? const PresetConfig(fl: 22, fr: 22, rl: 22, rr: 22);
 
     return Scaffold(
       appBar: AppBar(
@@ -963,11 +1051,11 @@ class _SuspensionPageState extends State<SuspensionPage> {
           Row(
             children: [
               const SizedBox(width: 2),
-              _presetButton('Comfort', comfort, Icons.self_improvement),
+              _presetButton('Comfort', presetComfort, Icons.self_improvement),
               const SizedBox(width: 8),
-              _presetButton('Sport', sport, Icons.speed),
+              _presetButton('Sport', presetSport, Icons.speed),
               const SizedBox(width: 8),
-              _presetButton('Track', track, Icons.flag),
+              _presetButton('Track', presetTrack, Icons.flag),
               const SizedBox(width: 2),
             ],
           ),

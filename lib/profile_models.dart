@@ -1,3 +1,28 @@
+class PresetConfig {
+  final int fl;
+  final int fr;
+  final int rl;
+  final int rr;
+
+  const PresetConfig({required this.fl, required this.fr, required this.rl, required this.rr});
+
+  PresetConfig copyWith({int? fl, int? fr, int? rl, int? rr}) {
+    return PresetConfig(
+      fl: fl ?? this.fl,
+      fr: fr ?? this.fr,
+      rl: rl ?? this.rl,
+      rr: rr ?? this.rr,
+    );
+  }
+
+  Map<String, Object?> toJson() => {'fl': fl, 'fr': fr, 'rl': rl, 'rr': rr};
+
+  static PresetConfig fromJson(Map<String, Object?> json, {int fallback = 0}) {
+    int i(dynamic v) => (v is num) ? v.toInt().clamp(0, 22) : fallback.clamp(0, 22);
+    return PresetConfig(fl: i(json['fl']), fr: i(json['fr']), rl: i(json['rl']), rr: i(json['rr']));
+  }
+}
+
 class SuspensionPid {
   final double kp;
   final double ki;
@@ -36,6 +61,10 @@ class SuspensionProfile {
 
   final int lastUsedMs;
 
+  final PresetConfig presetComfort;
+  final PresetConfig presetSport;
+  final PresetConfig presetTrack;
+
   const SuspensionProfile({
     required this.id,
     required this.name,
@@ -47,6 +76,9 @@ class SuspensionProfile {
     required this.rr,
     required this.pid,
     required this.lastUsedMs,
+    this.presetComfort = const PresetConfig(fl: 0, fr: 0, rl: 0, rr: 0),
+    this.presetSport = const PresetConfig(fl: 11, fr: 11, rl: 11, rr: 11),
+    this.presetTrack = const PresetConfig(fl: 22, fr: 22, rl: 22, rr: 22),
   });
 
   SuspensionProfile copyWith({
@@ -60,6 +92,9 @@ class SuspensionProfile {
     int? rr,
     SuspensionPid? pid,
     int? lastUsedMs,
+    PresetConfig? presetComfort,
+    PresetConfig? presetSport,
+    PresetConfig? presetTrack,
   }) {
     return SuspensionProfile(
       id: id ?? this.id,
@@ -72,6 +107,9 @@ class SuspensionProfile {
       rr: rr ?? this.rr,
       pid: pid ?? this.pid,
       lastUsedMs: lastUsedMs ?? this.lastUsedMs,
+      presetComfort: presetComfort ?? this.presetComfort,
+      presetSport: presetSport ?? this.presetSport,
+      presetTrack: presetTrack ?? this.presetTrack,
     );
   }
 
@@ -86,6 +124,9 @@ class SuspensionProfile {
         'rr': rr,
         'pid': pid.toJson(),
         'lastUsedMs': lastUsedMs,
+        'presetComfort': presetComfort.toJson(),
+        'presetSport': presetSport.toJson(),
+        'presetTrack': presetTrack.toJson(),
       };
 
   static SuspensionProfile fromJson(Map<String, Object?> json) {
@@ -96,6 +137,11 @@ class SuspensionProfile {
     final pid = (pidJson is Map)
         ? SuspensionPid.fromJson(pidJson.map((k, v) => MapEntry('$k', v as Object?)))
         : const SuspensionPid(kp: 18.0, ki: 0.02, kd: 3.0);
+
+    PresetConfig _presetFromJson(dynamic v, {required int fallback}) {
+      if (v is Map) return PresetConfig.fromJson(v.map((k, val) => MapEntry('$k', val as Object?)), fallback: fallback);
+      return PresetConfig(fl: fallback, fr: fallback, rl: fallback, rr: fallback);
+    }
 
     return SuspensionProfile(
       id: (json['id'] as String?) ?? 'p_${DateTime.now().millisecondsSinceEpoch}',
@@ -108,6 +154,9 @@ class SuspensionProfile {
       rr: i(json['rr'], 0).clamp(0, 22),
       pid: pid,
       lastUsedMs: i(json['lastUsedMs'], 0),
+      presetComfort: _presetFromJson(json['presetComfort'], fallback: 0),
+      presetSport: _presetFromJson(json['presetSport'], fallback: 11),
+      presetTrack: _presetFromJson(json['presetTrack'], fallback: 22),
     );
   }
 }
