@@ -987,7 +987,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
             crossAxisCount: MediaQuery.of(context).size.width > 760 ? 2 : 1,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: MediaQuery.of(context).size.width > 760 ? 2.9 : 2.1,
+            childAspectRatio: MediaQuery.of(context).size.width > 760 ? 2.2 : 1.7,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             children: [
