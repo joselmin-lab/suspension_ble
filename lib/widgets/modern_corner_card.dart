@@ -129,44 +129,81 @@ class ModernCornerCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Label row ──────────────────────────────────────────────────
+                 // ── Fila Superior: Etiqueta (Label) y Botón ENVIAR pequeño ──
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isConnected ? Colors.blueAccent : Colors.grey,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isConnected ? Colors.blueAccent : Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  letterSpacing: 0.5,
+              // Botón ENVIAR más pequeño y arriba a la derecha
+              SizedBox(
+                height: 28, // Altura reducida
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isConnected
+                        ? accent.withValues(alpha: 0.15)
+                        : Colors.transparent,
+                    foregroundColor: isConnected ? accent : Colors.white30,
+                    elevation: 0,
+                    side: BorderSide(
+                      color: isConnected
+                          ? accent.withValues(alpha: 0.5)
+                          : Colors.white12,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                  ),
+                  onPressed: isConnected
+                      ? () {
+                          HapticFeedback.mediumImpact();
+                          onSend?.call();
+                        }
+                      : null,
+                  icon: const Icon(Icons.send_rounded, size: 12),
+                  label: const Text(
+                    'ENVIAR',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 10),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // ── Main content row ────────────────────────────────────────────
+          const SizedBox(height: 14),
+          
+          // ── Fila de Contenido Principal (Nivel y Botones +/-) ──
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Level indicator tube
+              // Tubo indicador de nivel
               _LevelIndicator(fraction: fillFraction, color: accent),
               const SizedBox(width: 12),
-              // Controls column
+              
+              // Columna de controles (Número y +/-)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Animated click value
+                    // Número de clicks animado
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
@@ -200,7 +237,7 @@ class ModernCornerCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // + / – buttons
+                    // Botones + y -
                     Row(
                       children: [
                         Expanded(
@@ -219,38 +256,6 @@ class ModernCornerCard extends StatelessWidget {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    // ENVIAR button
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isConnected
-                            ? accent.withValues(alpha: 0.15)
-                            : Colors.transparent,
-                        foregroundColor:
-                            isConnected ? accent : Colors.white30,
-                        elevation: 0,
-                        side: BorderSide(
-                          color: isConnected
-                              ? accent.withValues(alpha: 0.5)
-                              : Colors.white12,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 9),
-                        minimumSize: const Size(0, 36),
-                      ),
-                      onPressed: isConnected
-                          ? () {
-                              HapticFeedback.mediumImpact();
-                              onSend?.call();
-                            }
-                          : null,
-                      icon: const Icon(Icons.send_rounded, size: 14),
-                      label: const Text(
-                        'ENVIAR',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 11),
-                      ),
                     ),
                   ],
                 ),
