@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'ble_transport.dart';
 import 'device_picker_page.dart';
 import 'profile_models.dart';
 import 'profile_store.dart';
+import 'widgets/modern_corner_card.dart';
 
 void main() => runApp(const SuspensionUiApp());
 
@@ -32,7 +34,83 @@ class SuspensionUiApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Suspensión BLE',
-      theme: ThemeData.dark(useMaterial3: true),
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        colorScheme: ColorScheme.dark(
+          primary: Colors.blueAccent,
+          secondary: Colors.blueAccent,
+          surface: const Color(0xFF1E1E1E),
+          onSurface: Colors.white,
+          onPrimary: Colors.white,
+        ),
+        cardColor: const Color(0xFF2A2A2A),
+        cardTheme: CardTheme(
+          color: const Color(0xFF2A2A2A),
+          elevation: 4,
+          shadowColor: Colors.black54,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1A1A1A),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            letterSpacing: 0.5,
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.blueAccent,
+            side: const BorderSide(color: Colors.blueAccent),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF1E1E1E),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Colors.white24),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Colors.white24),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Colors.blueAccent),
+          ),
+          labelStyle: const TextStyle(color: Colors.white54),
+        ),
+        dropdownMenuTheme: const DropdownMenuThemeData(
+          menuStyle: MenuStyle(
+            backgroundColor: WidgetStatePropertyAll(Color(0xFF2A2A2A)),
+          ),
+        ),
+        dividerColor: Colors.white12,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Colors.white70),
+        ),
+      ),
       home: const SuspensionPage(),
     );
   }
@@ -410,6 +488,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
 
   Future<void> _sendAll() async {
     try {
+      HapticFeedback.mediumImpact();
       for (final c in Corner.values) {
         await _sendOne(c);
       }
@@ -420,6 +499,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
   }
 
   Future<void> _applyPresetAndSend(String presetName, int v) async {
+    HapticFeedback.mediumImpact();
     v = _clampClicks(v);
 
     setState(() {
@@ -468,115 +548,241 @@ class _SuspensionPageState extends State<SuspensionPage> {
   Widget _profilesPanel() {
     final a = active;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Perfil', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: loadingProfiles
-                      ? const Text('Cargando perfiles...')
-                      : DropdownButtonFormField<String>(
-                          initialValue: a?.id,
-                          items: profiles
-                              .map((p) => DropdownMenuItem(
-                                    value: p.id,
-                                    child: Text(p.name),
-                                  ))
-                              .toList(),
-                          onChanged: (id) {
-                            if (id == null) return;
-                            final p = profiles.firstWhere((x) => x.id == id);
-                            _setActiveProfile(p);
-                          },
-                          decoration: const InputDecoration(
-                            labelText: 'Seleccionar perfil',
-                            border: OutlineInputBorder(),
-                          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.folder_special_rounded, size: 16, color: Colors.blueAccent),
+              SizedBox(width: 8),
+              Text(
+                'PERFIL',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: loadingProfiles
+                    ? const Text('Cargando perfiles...')
+                    : DropdownButtonFormField<String>(
+                        value: a?.id,
+                        items: profiles
+                            .map((p) => DropdownMenuItem(
+                                  value: p.id,
+                                  child: Text(
+                                    p.name,
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                ))
+                            .toList(),
+                        onChanged: (id) {
+                          if (id == null) return;
+                          final p = profiles.firstWhere((x) => x.id == id);
+                          _setActiveProfile(p);
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Seleccionar perfil',
                         ),
+                        dropdownColor: const Color(0xFF2A2A2A),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _createProfile,
+                tooltip: 'Nuevo perfil',
+                icon: const Icon(Icons.add_circle_outline, color: Colors.blueAccent),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Opciones de perfil',
+                icon: const Icon(Icons.more_vert, color: Colors.white54),
+                color: const Color(0xFF2A2A2A),
+                onSelected: (v) {
+                  switch (v) {
+                    case 'rename':
+                      _renameActiveProfile();
+                      break;
+                    case 'assign':
+                      _assignDeviceToActiveProfile();
+                      break;
+                    case 'delete':
+                      _deleteActiveProfile();
+                      break;
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'rename', child: Text('Renombrar')),
+                  PopupMenuItem(value: 'assign', child: Text('Asignar/Conectar dispositivo')),
+                  PopupMenuItem(value: 'delete', child: Text('Eliminar')),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                a?.deviceId != null ? Icons.bluetooth : Icons.bluetooth_disabled,
+                size: 14,
+                color: a?.deviceId != null ? Colors.blueAccent : Colors.white30,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  a?.deviceId == null
+                      ? 'Sin dispositivo asignado'
+                      : '${a?.deviceName ?? "(sin nombre)"}  ·  ${a?.deviceId}',
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: _createProfile,
-                  tooltip: 'Nuevo perfil',
-                  icon: const Icon(Icons.add),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: 'Opciones de perfil',
-                  onSelected: (v) {
-                    switch (v) {
-                      case 'rename':
-                        _renameActiveProfile();
-                        break;
-                      case 'assign':
-                        _assignDeviceToActiveProfile();
-                        break;
-                      case 'delete':
-                        _deleteActiveProfile();
-                        break;
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'rename', child: Text('Renombrar')),
-                    PopupMenuItem(value: 'assign', child: Text('Asignar/Conectar dispositivo')),
-                    PopupMenuItem(value: 'delete', child: Text('Eliminar')),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              a?.deviceId == null
-                  ? 'Device: (no asignado)'
-                  : 'Device: ${a?.deviceName ?? "(sin nombre)"} (${a?.deviceId})',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _blePanel() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                ble.isConnected ? 'BLE: Conectado' : 'BLE: Desconectado',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            if (!ble.isConnected)
-              FilledButton.icon(
-                onPressed: _connectManual,
-                icon: const Icon(Icons.bluetooth_connected),
-                label: const Text('Conectar'),
-              )
-            else
-              OutlinedButton.icon(
-                onPressed: _disconnect,
-                icon: const Icon(Icons.link_off),
-                label: const Text('Desconectar'),
-              ),
-          ],
+    final isConnected = ble.isConnected;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: isConnected
+              ? Colors.blueAccent.withValues(alpha: 0.4)
+              : Colors.white12,
+          width: 1,
         ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          // LED indicator
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isConnected ? Colors.blueAccent : Colors.grey,
+              boxShadow: isConnected
+                  ? [
+                      const BoxShadow(
+                        color: Colors.blueAccent,
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isConnected ? 'CONECTADO' : 'DESCONECTADO',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    letterSpacing: 1.5,
+                    color: isConnected ? Colors.blueAccent : Colors.white38,
+                  ),
+                ),
+                const Text(
+                  'Bluetooth BLE',
+                  style: TextStyle(color: Colors.white30, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          if (!isConnected)
+            FilledButton.icon(
+              onPressed: _connectManual,
+              icon: const Icon(Icons.bluetooth_searching, size: 18),
+              label: const Text('Conectar'),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: _disconnect,
+              icon: const Icon(Icons.link_off, size: 18),
+              label: const Text('Desconectar'),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _presetButton(String label, int value) {
+  Widget _presetButton(String label, int value, IconData icon) {
+    final isConnected = ble.isConnected;
     return Expanded(
-      child: FilledButton(
-        onPressed: ble.isConnected ? () => _applyPresetAndSend(label, value) : null,
-        child: Text('$label ($value)'),
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isConnected
+              ? Colors.blueAccent.withValues(alpha: 0.12)
+              : Colors.transparent,
+          foregroundColor: isConnected ? Colors.blueAccent : Colors.white24,
+          elevation: 0,
+          side: BorderSide(
+            color: isConnected
+                ? Colors.blueAccent.withValues(alpha: 0.4)
+                : Colors.white12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        onPressed: isConnected ? () => _applyPresetAndSend(label, value) : null,
+        icon: Icon(icon, size: 16),
+        label: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                letterSpacing: 1,
+              ),
+            ),
+            Text(
+              '$value clk',
+              style: const TextStyle(fontSize: 10, color: Colors.white38),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -584,83 +790,97 @@ class _SuspensionPageState extends State<SuspensionPage> {
   Widget _cornerCard(Corner c) {
     final v = _clampClicks(clicks[c] ?? 0);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(c.label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text('$v', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-                const SizedBox(width: 10),
-                const Text('clicks'),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed: ble.isConnected ? () => _sendOne(c) : null,
-                  icon: const Icon(Icons.send),
-                  label: const Text('Enviar'),
-                ),
-              ],
-            ),
-            Slider(
-              value: v.toDouble(),
-              min: 0,
-              max: 22,
-              divisions: 22,
-              label: '$v',
-              onChanged: (d) => setState(() => clicks[c] = d.toInt()),
-              onChangeEnd: (_) => _saveActiveFromUi(), // guardar al soltar
-            ),
-          ],
-        ),
-      ),
+    return ModernCornerCard(
+      label: c.label,
+      clicks: v,
+      isConnected: ble.isConnected,
+      onChanged: (val) => setState(() => clicks[c] = val),
+      onSend: () => _sendOne(c),
+      onChangeEnd: _saveActiveFromUi,
     );
   }
 
-  Widget _logPanel() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: SizedBox(
-          height: 240,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Consola', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: logs.isEmpty
-                      ? const Text('Logs BLE y comandos.')
-                      : ListView.builder(
-                          itemCount: logs.length,
-                          itemBuilder: (context, i) => Text(
-                            logs[i],
-                            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                          ),
-                        ),
-                ),
+  void _showConsole() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.55,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        builder: (_, controller) => Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
               ),
-              const SizedBox(height: 8),
-              Row(
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
                 children: [
-                  OutlinedButton(
-                    onPressed: () => setState(() => logs.clear()),
-                    child: const Text('Limpiar'),
+                  const Icon(Icons.terminal, size: 16, color: Colors.blueAccent),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'CONSOLA',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                      fontSize: 13,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  const Spacer(),
+                  StatefulBuilder(
+                    builder: (ctx2, setS) => TextButton.icon(
+                      onPressed: () {
+                        setState(() => logs.clear());
+                        setS(() {});
+                      },
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: const Text('Limpiar'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.white38),
+                    ),
                   ),
                 ],
-              )
-            ],
-          ),
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            Expanded(
+              child: StatefulBuilder(
+                builder: (ctx2, setS) => logs.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Sin logs aún.',
+                          style: TextStyle(color: Colors.white30),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: controller,
+                        padding: const EdgeInsets.all(12),
+                        itemCount: logs.length,
+                        itemBuilder: (_, i) => Text(
+                          logs[i],
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            color: Colors.white60,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -676,6 +896,55 @@ class _SuspensionPageState extends State<SuspensionPage> {
       appBar: AppBar(
         title: const Text('Suspensión BLE'),
         actions: [
+          // BLE status indicator in AppBar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: IconButton(
+              onPressed: _showConsole,
+              icon: const Icon(Icons.terminal),
+              tooltip: 'Ver consola',
+            ),
+          ),
+          // Glowing LED + status text
+          GestureDetector(
+            onTap: ble.isConnected ? _disconnect : _connectManual,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 400),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: ble.isConnected ? Colors.blueAccent : Colors.grey,
+                      boxShadow: ble.isConnected
+                          ? [
+                              const BoxShadow(
+                                color: Colors.blueAccent,
+                                blurRadius: 6,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    ble.isConnected ? 'BLE' : 'BLE',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: ble.isConnected ? Colors.blueAccent : Colors.white38,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+              ),
+            ),
+          ),
           IconButton(
             onPressed: _openAdvanced,
             icon: const Icon(Icons.tune),
@@ -684,31 +953,41 @@ class _SuspensionPageState extends State<SuspensionPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
         children: [
           _profilesPanel(),
+          const SizedBox(height: 12),
           _blePanel(),
+          const SizedBox(height: 16),
+          // Preset buttons
           Row(
             children: [
-              _presetButton('Comfort', comfort),
+              const SizedBox(width: 2),
+              _presetButton('Comfort', comfort, Icons.self_improvement),
               const SizedBox(width: 8),
-              _presetButton('Sport', sport),
+              _presetButton('Sport', sport, Icons.speed),
               const SizedBox(width: 8),
-              _presetButton('Track', track),
+              _presetButton('Track', track, Icons.flag),
+              const SizedBox(width: 2),
             ],
           ),
           const SizedBox(height: 10),
+          // Send All button
           FilledButton.icon(
             onPressed: ble.isConnected ? _sendAll : null,
-            icon: const Icon(Icons.send),
-            label: const Text('Enviar todo'),
+            icon: const Icon(Icons.send_rounded),
+            label: const Text(
+              'ENVIAR TODO',
+              style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 1),
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          // Corner cards grid
           GridView.count(
             crossAxisCount: MediaQuery.of(context).size.width > 760 ? 2 : 1,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: MediaQuery.of(context).size.width > 760 ? 2.7 : 1.95,
+            childAspectRatio: MediaQuery.of(context).size.width > 760 ? 2.9 : 2.1,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             children: [
@@ -718,8 +997,6 @@ class _SuspensionPageState extends State<SuspensionPage> {
               _cornerCard(Corner.rr),
             ],
           ),
-          const SizedBox(height: 12),
-          _logPanel(),
         ],
       ),
     );
