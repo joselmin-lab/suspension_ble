@@ -3,7 +3,7 @@ name: Build Flutter App (Android & iOS)
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # Permite ejecutar la compilación manualmente con un botón
+  workflow_dispatch:
 
 jobs:
   build:
@@ -11,15 +11,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # ubuntu compila Android, macos compila iOS
         os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
             output-name: AMS_BT_Android_APK
             output-path: build/app/outputs/flutter-apk/app-release.apk
           - os: macos-latest
-            output-name: AMS_BT_iOS_Build
-            output-path: build/ios/iphoneos/Runner.app
+            output-name: AMS_BT_iOS_IPA
+            output-path: build/ios/iphoneos/AMS_BT.ipa
 
     steps:
       - name: Checkout código fuente
@@ -38,9 +37,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: flutter build apk --release
 
-      - name: Construir iOS (Sin firma)
+      - name: Construir iOS y empaquetar a IPA (Sin firma)
         if: matrix.os == 'macos-latest'
-        run: flutter build ios --release --no-codesign
+        run: |
+          flutter build ios --release --no-codesign
+          cd build/ios/iphoneos
+          mkdir Payload
+          mv Runner.app Payload/
+          zip -qr AMS_BT.ipa Payload/
 
       - name: Subir archivo generado (Artifact)
         uses: actions/upload-artifact@v4
