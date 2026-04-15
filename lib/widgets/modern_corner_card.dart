@@ -51,7 +51,7 @@ class _LevelIndicator extends StatelessWidget {
                         end: Alignment.topCenter,
                         colors: [
                           c,
-                          c.withValues(alpha: 0.55),
+                          c.withValues(alpha: 0.55), // fade toward top for depth
                         ],
                       ),
                     ),
@@ -190,7 +190,7 @@ class ModernCornerCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 5),
                         const Text(
-                          'CLK',
+                          'CLICKS',
                           style: TextStyle(
                             fontSize: 11,
                             letterSpacing: 2,
@@ -205,7 +205,7 @@ class ModernCornerCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: _AdjustButton(
-                            label: '−',
+                            label: '-',
                             onPressed: _decrement,
                             color: accent,
                           ),
