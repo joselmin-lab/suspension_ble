@@ -46,7 +46,7 @@ class SuspensionUiApp extends StatelessWidget {
           onPrimary: Colors.white,
         ),
         cardColor: const Color(0xFF2A2A2A),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF2A2A2A),
           elevation: 4,
           shadowColor: Colors.black54,
@@ -586,7 +586,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
                 child: loadingProfiles
                     ? const Text('Cargando perfiles...')
                     : DropdownButtonFormField<String>(
-                        value: a?.id,
+                        initialValue: a?.id,
                         items: profiles
                             .map((p) => DropdownMenuItem(
                                   value: p.id,
