@@ -33,7 +33,7 @@ class SuspensionUiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Suspensión BLE',
+      title: 'AMS BT',
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
@@ -982,7 +982,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Suspensión BLE'),
+        title: const Text('AMS SUSPENSION BT SETUP'),
         actions: [
           // BLE status indicator in AppBar
           Padding(
