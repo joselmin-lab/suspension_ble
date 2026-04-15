@@ -830,7 +830,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
     final allSame = config.fl == config.fr && config.fr == config.rl && config.rl == config.rr;
     final summaryText = allSame
         ? '${config.fl} clk'
-        : 'FL:${config.fl} FR:${config.fr} | RL:${config.rl} RR:${config.rr}';
+        : '${config.fl}/${config.fr} · ${config.rl}/${config.rr}';
 
     return Expanded(
       child: ElevatedButton.icon(
