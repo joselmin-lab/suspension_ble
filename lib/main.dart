@@ -146,6 +146,10 @@ class _SuspensionPageState extends State<SuspensionPage> {
   double ki = 0.02;
   double kd = 3.0;
 
+  int presetComfort = 0;
+  int presetSport = 11;
+  int presetTrack = 22;
+
   // ===== Helpers =====
   void _log(String line) {
     setState(() {
@@ -200,6 +204,10 @@ class _SuspensionPageState extends State<SuspensionPage> {
       kp = p.pid.kp;
       ki = p.pid.ki;
       kd = p.pid.kd;
+
+      presetComfort = p.presetComfort;
+      presetSport = p.presetSport;
+      presetTrack = p.presetTrack;
     });
   }
 
@@ -213,6 +221,9 @@ class _SuspensionPageState extends State<SuspensionPage> {
       rr: _clampClicks(clicks[Corner.rr] ?? 0),
       pid: SuspensionPid(kp: kp, ki: ki, kd: kd),
       lastUsedMs: DateTime.now().millisecondsSinceEpoch,
+      presetComfort: presetComfort,
+      presetSport: presetSport,
+      presetTrack: presetTrack,
     );
   }
 
@@ -330,6 +341,9 @@ class _SuspensionPageState extends State<SuspensionPage> {
       rr: _clampClicks(clicks[Corner.rr] ?? 0),
       pid: SuspensionPid(kp: kp, ki: ki, kd: kd),
       lastUsedMs: now,
+      presetComfort: presetComfort,
+      presetSport: presetSport,
+      presetTrack: presetTrack,
     );
 
     final newProfiles = [...profiles, p];
@@ -399,6 +413,9 @@ class _SuspensionPageState extends State<SuspensionPage> {
         rr: 0,
         pid: const SuspensionPid(kp: 18.0, ki: 0.02, kd: 3.0),
         lastUsedMs: now,
+        presetComfort: 0,
+        presetSport: 11,
+        presetTrack: 22,
       );
       remaining.add(def);
     }
@@ -517,6 +534,79 @@ class _SuspensionPageState extends State<SuspensionPage> {
     }
 
     _log('INFO -> Preset $presetName enviado a los 4 motores');
+  }
+
+  Future<void> _configurePreset(String presetName, int currentValue, ValueChanged<int> onSave) async {
+    int tempValue = currentValue;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('Configurar $presetName'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Mantén presionado para configurar cuántos clicks\ncorresponden al modo $presetName.',
+                style: const TextStyle(fontSize: 13, color: Colors.white54),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '$tempValue',
+                    style: const TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.blueAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'clicks',
+                    style: TextStyle(fontSize: 14, color: Colors.white38),
+                  ),
+                ],
+              ),
+              Slider(
+                value: tempValue.toDouble(),
+                min: 0,
+                max: 22,
+                divisions: 22,
+                label: '$tempValue',
+                onChanged: (v) => setDialogState(() => tempValue = v.round()),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('0', style: TextStyle(fontSize: 11, color: Colors.white38)),
+                  const Text('11', style: TextStyle(fontSize: 11, color: Colors.white38)),
+                  const Text('22', style: TextStyle(fontSize: 11, color: Colors.white38)),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    onSave(tempValue);
+    await _saveActiveFromUi();
+    _log('UI  -> Preset $presetName configurado: $tempValue clicks');
   }
 
   Future<void> _openAdvanced() async {
@@ -744,7 +834,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
     );
   }
 
-  Widget _presetButton(String label, int value, IconData icon) {
+  Widget _presetButton(String label, int value, IconData icon, {VoidCallback? onConfigure}) {
     final isConnected = ble.isConnected;
     return Expanded(
       child: ElevatedButton.icon(
@@ -765,6 +855,7 @@ class _SuspensionPageState extends State<SuspensionPage> {
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
         onPressed: isConnected ? () => _applyPresetAndSend(label, value) : null,
+        onLongPress: onConfigure,
         icon: Icon(icon, size: 16),
         label: Column(
           mainAxisSize: MainAxisSize.min,
@@ -888,10 +979,6 @@ class _SuspensionPageState extends State<SuspensionPage> {
 
   @override
   Widget build(BuildContext context) {
-    const comfort = 0;
-    const sport = 11;
-    const track = 22;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Suspensión BLE'),
@@ -963,11 +1050,14 @@ class _SuspensionPageState extends State<SuspensionPage> {
           Row(
             children: [
               const SizedBox(width: 2),
-              _presetButton('Comfort', comfort, Icons.self_improvement),
+              _presetButton('Comfort', presetComfort, Icons.self_improvement,
+                  onConfigure: () => _configurePreset('Comfort', presetComfort, (v) => setState(() => presetComfort = v))),
               const SizedBox(width: 8),
-              _presetButton('Sport', sport, Icons.speed),
+              _presetButton('Sport', presetSport, Icons.speed,
+                  onConfigure: () => _configurePreset('Sport', presetSport, (v) => setState(() => presetSport = v))),
               const SizedBox(width: 8),
-              _presetButton('Track', track, Icons.flag),
+              _presetButton('Track', presetTrack, Icons.flag,
+                  onConfigure: () => _configurePreset('Track', presetTrack, (v) => setState(() => presetTrack = v))),
               const SizedBox(width: 2),
             ],
           ),

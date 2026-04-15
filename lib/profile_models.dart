@@ -36,6 +36,10 @@ class SuspensionProfile {
 
   final int lastUsedMs;
 
+  final int presetComfort;
+  final int presetSport;
+  final int presetTrack;
+
   const SuspensionProfile({
     required this.id,
     required this.name,
@@ -47,6 +51,9 @@ class SuspensionProfile {
     required this.rr,
     required this.pid,
     required this.lastUsedMs,
+    this.presetComfort = 0,
+    this.presetSport = 11,
+    this.presetTrack = 22,
   });
 
   SuspensionProfile copyWith({
@@ -60,6 +67,9 @@ class SuspensionProfile {
     int? rr,
     SuspensionPid? pid,
     int? lastUsedMs,
+    int? presetComfort,
+    int? presetSport,
+    int? presetTrack,
   }) {
     return SuspensionProfile(
       id: id ?? this.id,
@@ -72,6 +82,9 @@ class SuspensionProfile {
       rr: rr ?? this.rr,
       pid: pid ?? this.pid,
       lastUsedMs: lastUsedMs ?? this.lastUsedMs,
+      presetComfort: presetComfort ?? this.presetComfort,
+      presetSport: presetSport ?? this.presetSport,
+      presetTrack: presetTrack ?? this.presetTrack,
     );
   }
 
@@ -86,6 +99,9 @@ class SuspensionProfile {
         'rr': rr,
         'pid': pid.toJson(),
         'lastUsedMs': lastUsedMs,
+        'presetComfort': presetComfort,
+        'presetSport': presetSport,
+        'presetTrack': presetTrack,
       };
 
   static SuspensionProfile fromJson(Map<String, Object?> json) {
@@ -108,6 +124,9 @@ class SuspensionProfile {
       rr: i(json['rr'], 0).clamp(0, 22),
       pid: pid,
       lastUsedMs: i(json['lastUsedMs'], 0),
+      presetComfort: i(json['presetComfort'], 0).clamp(0, 22),
+      presetSport: i(json['presetSport'], 11).clamp(0, 22),
+      presetTrack: i(json['presetTrack'], 22).clamp(0, 22),
     );
   }
 }
